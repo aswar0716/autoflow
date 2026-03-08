@@ -14,7 +14,8 @@ This is the most widely used agent pattern in production systems.
 """
 
 import os
-from typing import Optional
+import json
+from typing import Optional, AsyncGenerator
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -26,28 +27,25 @@ from app.models.schemas import StepLog, TaskResponse, TaskStatus
 
 
 # Registry mapping tool names → tool objects
-# This lets the API selectively enable tools per task
 TOOL_REGISTRY = {
-    "search": get_search_tool,   # callable so we init fresh each time
+    "search": get_search_tool,
     "summarize": lambda: summarize_text,
     "email": lambda: send_email,
 }
 
+SYSTEM_PROMPT = (
+    "You are AutoFlow, a business workflow automation agent. "
+    "You help users complete multi-step business tasks autonomously. "
+    "Break tasks into logical steps, use the right tools, and always "
+    "return a clear, actionable final answer."
+)
+
 
 def build_agent(enabled_tools: Optional[list[str]] = None):
-    """
-    Construct a LangGraph ReAct agent with the specified tools.
-
-    Args:
-        enabled_tools: list of tool names from TOOL_REGISTRY.
-                       If None, all tools are enabled.
-
-    Returns:
-        A compiled LangGraph agent ready to invoke.
-    """
+    """Construct a LangGraph ReAct agent with the specified tools."""
     llm = ChatOpenAI(
         model="gpt-4o",
-        temperature=0,          # 0 = deterministic, best for task execution
+        temperature=0,
         api_key=os.getenv("OPENAI_API_KEY"),
     )
 
@@ -60,35 +58,17 @@ def build_agent(enabled_tools: Optional[list[str]] = None):
             if name in TOOL_REGISTRY
         ]
 
-    agent = create_react_agent(llm, tools)
-    return agent
+    return create_react_agent(llm, tools)
 
 
 def run_task(task: str, enabled_tools: Optional[list[str]] = None) -> TaskResponse:
-    """
-    Run a task through the AutoFlow agent and return structured results.
-
-    The agent will:
-    1. Receive the task as a HumanMessage
-    2. Reason about which tools to use
-    3. Execute tools in sequence
-    4. Return a final answer
-
-    We capture every intermediate step to build a step-by-step audit log.
-    """
+    """Run a task synchronously and return structured results."""
     agent = build_agent(enabled_tools)
-
-    system_prompt = (
-        "You are AutoFlow, a business workflow automation agent. "
-        "You help users complete multi-step business tasks autonomously. "
-        "Break tasks into logical steps, use the right tools, and always "
-        "return a clear, actionable final answer."
-    )
 
     try:
         result = agent.invoke({
             "messages": [HumanMessage(content=task)],
-        }, config={"configurable": {"system_message": system_prompt}})
+        })
 
         steps = _parse_steps(result["messages"])
         final_answer = _extract_final_answer(result["messages"])
@@ -106,25 +86,82 @@ def run_task(task: str, enabled_tools: Optional[list[str]] = None) -> TaskRespon
         )
 
 
-def _parse_steps(messages: list) -> list[StepLog]:
+async def stream_task(
+    task: str,
+    enabled_tools: Optional[list[str]] = None,
+) -> AsyncGenerator[str, None]:
     """
-    Convert LangGraph message history into structured StepLog entries.
+    Run a task and stream each step as a Server-Sent Event (SSE).
 
-    LangGraph returns a flat list of messages:
-    - HumanMessage: the original task
-    - AIMessage: agent reasoning + tool call decisions
-    - ToolMessage: results from tool executions
-    - Final AIMessage: the answer
+    SSE format: each message is a line starting with "data: " followed by JSON.
+    The browser's EventSource API reads these automatically.
+
+    We use LangGraph's astream_events() which fires events for every internal
+    action: model thinking, tool calls, tool results, final answer.
     """
+    agent = build_agent(enabled_tools)
+    step_num = 0
+
+    try:
+        async for event in agent.astream_events(
+            {"messages": [HumanMessage(content=task)]},
+            version="v2",
+        ):
+            kind = event["event"]
+
+            # Agent starts calling a tool
+            if kind == "on_tool_start":
+                step_num += 1
+                payload = {
+                    "step": step_num,
+                    "type": "tool_call",
+                    "tool_name": event["name"],
+                    "tool_input": event.get("data", {}).get("input", {}),
+                    "content": f"Calling tool: {event['name']}",
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+
+            # Tool finishes, result is available
+            elif kind == "on_tool_end":
+                step_num += 1
+                output = event.get("data", {}).get("output", "")
+                payload = {
+                    "step": step_num,
+                    "type": "tool_result",
+                    "tool_name": event["name"],
+                    "content": str(output)[:500],
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+
+            # LLM produces its final answer (no tool call)
+            elif kind == "on_chat_model_end":
+                msg = event.get("data", {}).get("output")
+                if msg and hasattr(msg, "content") and not getattr(msg, "tool_calls", None):
+                    step_num += 1
+                    payload = {
+                        "step": step_num,
+                        "type": "final",
+                        "content": msg.content,
+                    }
+                    yield f"data: {json.dumps(payload)}\n\n"
+
+        # Signal stream is complete
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+
+def _parse_steps(messages: list) -> list[StepLog]:
+    """Convert LangGraph message history into structured StepLog entries."""
     steps = []
     step_num = 0
 
     for msg in messages:
         if isinstance(msg, HumanMessage):
-            continue  # skip the input
+            continue
 
         if isinstance(msg, AIMessage):
-            # Check if this AIMessage contains tool calls (intermediate step)
             if msg.tool_calls:
                 for tc in msg.tool_calls:
                     step_num += 1
@@ -136,7 +173,6 @@ def _parse_steps(messages: list) -> list[StepLog]:
                         tool_input=tc["args"],
                     ))
             else:
-                # Final answer message
                 step_num += 1
                 steps.append(StepLog(
                     step=step_num,
@@ -150,7 +186,7 @@ def _parse_steps(messages: list) -> list[StepLog]:
                 step=step_num,
                 type="tool_result",
                 tool_name=msg.name,
-                content=str(msg.content)[:500],  # truncate long results
+                content=str(msg.content)[:500],
             ))
 
     return steps

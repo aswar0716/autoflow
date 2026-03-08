@@ -6,19 +6,30 @@ It auto-generates OpenAPI docs (visit /docs when running) and handles async I/O
 efficiently — important when agent tasks involve multiple slow API calls.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from app.api.routes import router
+from app.database import init_db
 
 # Load environment variables from .env file before anything else
 load_dotenv()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run startup/shutdown logic. Creates DB tables on first launch."""
+    await init_db()
+    yield
+
+
 app = FastAPI(
     title="AutoFlow",
     description="AI Agent for Business Workflow Automation",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 # CORS: Allow the Next.js frontend (running on port 3000) to call this API
