@@ -40,3 +40,47 @@ class TaskRecord(Base):
         if not self.steps_json:
             return []
         return json.loads(self.steps_json)
+
+
+class WorkflowRecord(Base):
+    """
+    A saved, reusable workflow — a named configuration of tools and a prompt template.
+
+    Users build these visually in the drag-and-drop canvas, then run them by ID.
+
+    Table: workflows
+    """
+    __tablename__ = "workflows"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    tools_json: Mapped[str] = mapped_column(Text, nullable=False)   # JSON array of tool names
+    nodes_json: Mapped[str] = mapped_column(Text, nullable=True)    # React Flow node positions
+    edges_json: Mapped[str] = mapped_column(Text, nullable=True)    # React Flow edge connections
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    def set_tools(self, tools: list[str]):
+        self.tools_json = json.dumps(tools)
+
+    def get_tools(self) -> list[str]:
+        return json.loads(self.tools_json) if self.tools_json else []
+
+    def set_nodes(self, nodes: list):
+        self.nodes_json = json.dumps(nodes)
+
+    def get_nodes(self) -> list:
+        return json.loads(self.nodes_json) if self.nodes_json else []
+
+    def set_edges(self, edges: list):
+        self.edges_json = json.dumps(edges)
+
+    def get_edges(self) -> list:
+        return json.loads(self.edges_json) if self.edges_json else []

@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from app.api.routes import router
+from app.api.workflow_routes import router as workflow_router
 from app.database import init_db
 
 # Load environment variables from .env file before anything else
@@ -43,6 +44,8 @@ app.add_middleware(
 
 # Mount all routes under /api/v1
 app.include_router(router, prefix="/api/v1")
+app.include_router(workflow_router, prefix="/api/v1/workflows", tags=["workflows"])
+app.version = "0.3.0"
 
 
 @app.get("/")
