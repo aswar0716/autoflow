@@ -130,6 +130,7 @@ export default function Home() {
               placeholder-gray-400"
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
+              if (e.key === "Escape") { reset(); setTaskInput(""); setSelectedTools([]); }
             }}
           />
 
@@ -154,7 +155,7 @@ export default function Home() {
             </button>
           </div>
 
-          <p className="text-xs text-gray-400">Tip: Ctrl+Enter to run</p>
+          <p className="text-xs text-gray-400">Tip: Ctrl+Enter to run · Esc to clear</p>
         </div>
 
         {/* Step feed */}

@@ -316,6 +316,10 @@ export default function WorkflowsPage() {
                   placeholder="Describe your task…"
                   rows={3}
                   className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRun();
+                    if (e.key === "Escape") { setTaskInput(""); setSteps([]); setRunError(null); }
+                  }}
                 />
                 <button
                   onClick={handleRun}
@@ -324,6 +328,7 @@ export default function WorkflowsPage() {
                 >
                   {isRunning ? "Running…" : "▶ Run Workflow"}
                 </button>
+                <p className="text-xs text-gray-400 text-center">Ctrl+Enter to run · Esc to clear</p>
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 py-3">
