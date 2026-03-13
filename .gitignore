@@ -38,6 +38,9 @@ yarn-error.log*
 # Learning journal (personal notes)
 learning_journal.md
 
+# Claude memory (local only)
+memory/
+
 # Misc
 *.log
 .cache/
