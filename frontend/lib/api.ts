@@ -106,6 +106,75 @@ export async function deleteWorkflow(id: number): Promise<void> {
   await fetch(`${API_BASE}/workflows/${id}`, { method: "DELETE" });
 }
 
+// ─── Topics & Digests ────────────────────────────────────────────────────────
+
+export interface Topic {
+  id: number;
+  name: string;
+  query: string;
+  frequency: "hourly" | "daily" | "weekly";
+  recipients: string[];
+  is_active: boolean;
+  next_run: string | null;
+  last_run: string | null;
+  created_at: string;
+}
+
+export interface Digest {
+  id: number;
+  topic_id: number;
+  subject: string;
+  summary: string;
+  status: "sent" | "failed" | "pending";
+  error: string | null;
+  sent_to: string[];
+  created_at: string;
+  html_content: string;
+}
+
+export async function getTopics(): Promise<Topic[]> {
+  const res = await fetch(`${API_BASE}/topics`);
+  const data = await res.json();
+  return data.topics;
+}
+
+export async function createTopic(payload: {
+  name: string; query: string; frequency: string; recipients: string[];
+}): Promise<Topic> {
+  const res = await fetch(`${API_BASE}/topics`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function updateTopic(
+  id: number,
+  payload: Partial<{ name: string; query: string; frequency: string; recipients: string[]; is_active: boolean }>
+): Promise<Topic> {
+  const res = await fetch(`${API_BASE}/topics/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function deleteTopic(id: number): Promise<void> {
+  await fetch(`${API_BASE}/topics/${id}`, { method: "DELETE" });
+}
+
+export async function runTopicNow(id: number): Promise<void> {
+  await fetch(`${API_BASE}/topics/${id}/run`, { method: "POST" });
+}
+
+export async function getDigests(topicId: number): Promise<Digest[]> {
+  const res = await fetch(`${API_BASE}/topics/${topicId}/digests`);
+  const data = await res.json();
+  return data.digests;
+}
+
 export async function runWorkflowStream(
   workflowId: number,
   task: string,
