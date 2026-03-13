@@ -88,9 +88,10 @@ export default function Home() {
         <div className="px-4 py-5 border-b border-gray-100">
           <h1 className="text-lg font-bold text-indigo-600">AutoFlow</h1>
           <p className="text-xs text-gray-400 mt-0.5">AI Workflow Agent</p>
-          <Link href="/workflows" className="text-xs text-indigo-500 hover:underline mt-1 inline-block">
-            Workflow Builder →
-          </Link>
+          <div className="flex gap-3 mt-1">
+            <Link href="/topics" className="text-xs text-indigo-500 hover:underline">Digests →</Link>
+            <Link href="/workflows" className="text-xs text-indigo-500 hover:underline">Workflows →</Link>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-3">
