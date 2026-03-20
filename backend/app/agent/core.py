@@ -3,7 +3,7 @@ AutoFlow Agent Core
 
 This is where the LangChain agent is assembled. The key components are:
 
-1. LLM (GPT-4o): The brain that reasons about what to do next.
+1. LLM (Claude claude-sonnet-4-6): The brain that reasons about what to do next.
 2. Tools: The hands — search, email, summarize, etc.
 3. Agent: The loop that keeps calling LLM → pick tool → run tool → repeat
    until the task is complete.
@@ -16,7 +16,7 @@ This is the most widely used agent pattern in production systems.
 import os
 import json
 from typing import Optional, AsyncGenerator
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
@@ -43,10 +43,10 @@ SYSTEM_PROMPT = (
 
 def build_agent(enabled_tools: Optional[list[str]] = None):
     """Construct a LangGraph ReAct agent with the specified tools."""
-    llm = ChatOpenAI(
-        model="gpt-4o",
+    llm = ChatAnthropic(
+        model="claude-sonnet-4-6",
         temperature=0,
-        api_key=os.getenv("OPENAI_API_KEY"),
+        api_key=os.getenv("ANTHROPIC_API_KEY"),
     )
 
     if enabled_tools is None:
