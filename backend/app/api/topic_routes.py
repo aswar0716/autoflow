@@ -77,7 +77,10 @@ async def create_topic(body: TopicCreate, db: AsyncSession = Depends(get_db)):
     db.add(t)
     await db.commit()
     await db.refresh(t)
-    schedule_topic(t)
+    next_run = schedule_topic(t)
+    if next_run:
+        t.next_run = next_run
+        await db.commit()
     return _to_dict(t)
 
 
@@ -117,7 +120,10 @@ async def update_topic(
     await db.commit()
     await db.refresh(t)
     if t.is_active:
-        schedule_topic(t)
+        next_run = schedule_topic(t)
+        if next_run:
+            t.next_run = next_run
+            await db.commit()
     return _to_dict(t)
 
 

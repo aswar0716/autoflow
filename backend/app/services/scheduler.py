@@ -99,24 +99,38 @@ def _schedule_topic(topic: TopicRecord):
     job_id = f"topic_{topic.id}"
     trigger = FREQUENCY_TRIGGERS.get(topic.frequency, FREQUENCY_TRIGGERS["daily"])
 
-    # Remove existing job if present before re-adding
     if scheduler.get_job(job_id):
         scheduler.remove_job(job_id)
 
-    scheduler.add_job(
+    job = scheduler.add_job(
         _run_topic_job,
         trigger=trigger,
         args=[topic.id],
         id=job_id,
         replace_existing=True,
-        misfire_grace_time=3600,  # allow up to 1h late if server was down
+        misfire_grace_time=3600,
     )
-    logger.info("Scheduled topic %d (%s) with frequency: %s", topic.id, topic.name, topic.frequency)
+
+    # Persist next_run so the UI can display it without querying APScheduler directly
+    if job.next_run_time:
+        topic.next_run = job.next_run_time.replace(tzinfo=None)
+
+    logger.info(
+        "Scheduled topic %d (%s) — next run: %s",
+        topic.id, topic.name, job.next_run_time
+    )
 
 
-def schedule_topic(topic: TopicRecord):
-    """Public API — call this after creating/updating a topic."""
+def schedule_topic(topic: TopicRecord) -> datetime | None:
+    """
+    Public API — call this after creating/updating a topic.
+    Returns the next scheduled run time so the caller can persist it.
+    """
     _schedule_topic(topic)
+    job = scheduler.get_job(f"topic_{topic.id}")
+    if job and job.next_run_time:
+        return job.next_run_time.replace(tzinfo=None)
+    return None
 
 
 def unschedule_topic(topic_id: int):
