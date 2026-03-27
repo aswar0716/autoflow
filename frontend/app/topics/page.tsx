@@ -303,9 +303,19 @@ export default function TopicsPage() {
                       <p className="text-xs text-gray-500">Subject</p>
                       <p className="font-medium text-gray-800 text-sm">{previewDigest.subject}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Sent to</p>
-                      <p className="text-xs text-gray-600">{previewDigest.sent_to.join(", ") || "—"}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">Sent to</p>
+                        <p className="text-xs text-gray-600">{previewDigest.sent_to.join(", ") || "—"}</p>
+                      </div>
+                      <a
+                        href={`/digest/${previewDigest.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-lg border border-indigo-300 text-indigo-600 text-xs hover:bg-indigo-50 flex-shrink-0"
+                      >
+                        ↗ Share
+                      </a>
                     </div>
                   </div>
                   <iframe

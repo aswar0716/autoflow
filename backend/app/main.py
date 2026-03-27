@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from app.api.routes import router
 from app.api.workflow_routes import router as workflow_router
 from app.api.topic_routes import router as topic_router
+from app.api.digest_routes import router as digest_router
 from app.database import init_db
 from app.services.scheduler import scheduler, load_scheduled_topics
 
@@ -51,6 +52,7 @@ app.add_middleware(
 app.include_router(router, prefix="/api/v1")
 app.include_router(workflow_router, prefix="/api/v1/workflows", tags=["workflows"])
 app.include_router(topic_router, prefix="/api/v1/topics", tags=["topics"])
+app.include_router(digest_router, prefix="/api/v1/digests", tags=["digests"])
 
 
 @app.get("/")

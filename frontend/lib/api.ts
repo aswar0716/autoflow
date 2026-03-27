@@ -169,6 +169,12 @@ export async function runTopicNow(id: number): Promise<void> {
   await fetch(`${API_BASE}/topics/${id}/run`, { method: "POST" });
 }
 
+export async function getDigest(digestId: number): Promise<Digest & { topic_name: string }> {
+  const res = await fetch(`${API_BASE}/digests/${digestId}`);
+  if (!res.ok) throw new Error("Digest not found");
+  return res.json();
+}
+
 export async function getDigests(topicId: number): Promise<Digest[]> {
   const res = await fetch(`${API_BASE}/topics/${topicId}/digests`);
   const data = await res.json();
