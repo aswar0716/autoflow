@@ -1,17 +1,16 @@
 # AutoFlow
 
-An AI-powered workflow automation agent. Describe a task in plain English, watch the agent think and use tools in real time, and save reusable workflows you can run again with one click.
-
-Built as a learning project across 4 phases — backend agent core → task history & streaming → Next.js UI → drag-and-drop workflow builder.
+An AI-powered digest and workflow automation platform. Define topics in plain English, and AutoFlow's agent searches the web, synthesizes findings, and emails you a clean digest — automatically, on your schedule.
 
 ---
 
-## Features
+## What it does
 
-- **ReAct agent** — uses LangGraph to reason step-by-step and call tools autonomously
-- **Real-time streaming** — Server-Sent Events push each agent step to the browser as it happens
-- **Task history** — every run is saved to SQLite; browse and replay past tasks
-- **Drag-and-drop workflow builder** — visually connect tools with React Flow, save named workflows, run them on demand
+**Digest Engine** — Subscribe to any topic ("AI funding news", "Python jobs in Sydney", "LLM research papers"). AutoFlow searches the web, deduplicates results, synthesizes them using Claude, and delivers a formatted HTML email digest on your schedule (daily, weekly, or custom).
+
+**Task Runner** — Describe any business task in plain English. The agent reasons through it step by step, calls tools autonomously, and streams every action to your browser in real time.
+
+**Workflow Builder** — Visually design reusable agent workflows using a drag-and-drop canvas. Connect tools as nodes, save the workflow, and run it on demand.
 
 ---
 
@@ -19,12 +18,13 @@ Built as a learning project across 4 phases — backend agent core → task hist
 
 | Layer | Technology |
 |-------|-----------|
-| Agent | LangGraph (ReAct loop), LangChain tools, Claude claude-sonnet-4-6 |
-| Backend | FastAPI, SQLAlchemy (async), SQLite, Python 3.11 |
+| Agent | LangGraph (ReAct loop), LangChain, Claude claude-sonnet-4-6 (Anthropic) |
+| Search | Tavily — AI-native web search |
+| Backend | FastAPI, SQLAlchemy (async), SQLite, APScheduler |
 | Streaming | Server-Sent Events (SSE) via FastAPI `StreamingResponse` |
-| Frontend | Next.js 14 (App Router), React 18, TypeScript |
-| Styling | Tailwind CSS v3 |
-| Workflow canvas | React Flow (`@xyflow/react` v12) |
+| Email | SendGrid (HTML digest delivery) |
+| Frontend | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS v3 |
+| Canvas | React Flow (`@xyflow/react` v12) |
 
 ---
 
@@ -35,31 +35,38 @@ autoflow/
 ├── backend/
 │   ├── app/
 │   │   ├── agent/
-│   │   │   ├── core.py          # LangGraph ReAct agent + tool registry
-│   │   │   └── tools.py         # search, summarize, email tools
+│   │   │   ├── core.py               # LangGraph ReAct agent + streaming
+│   │   │   └── tools/                # search, summarize, email tools
 │   │   ├── api/
-│   │   │   ├── routes.py        # /run, /run/stream, /tasks, /tools
-│   │   │   └── workflow_routes.py  # /workflows CRUD + /run
+│   │   │   ├── routes.py             # /run, /run/stream, /tasks, /tools
+│   │   │   ├── workflow_routes.py    # /workflows CRUD + /run
+│   │   │   ├── topic_routes.py       # /topics CRUD + /run + digest history
+│   │   │   └── digest_routes.py      # /digests/:id (shareable page)
 │   │   ├── models/
-│   │   │   ├── db.py            # SQLAlchemy ORM (TaskRecord, WorkflowRecord)
-│   │   │   └── schemas.py       # Pydantic request/response schemas
-│   │   ├── database.py          # async engine, session factory, init_db
-│   │   └── main.py              # FastAPI app, CORS, lifespan
-│   └── requirements.txt
+│   │   │   ├── db.py                 # TaskRecord, WorkflowRecord, TopicRecord, DigestRecord
+│   │   │   └── schemas.py            # Pydantic request/response schemas
+│   │   ├── services/
+│   │   │   ├── digest.py             # search → synthesize → HTML → send pipeline
+│   │   │   └── scheduler.py          # APScheduler: per-topic cron jobs
+│   │   ├── database.py               # async engine, session factory, init_db
+│   │   └── main.py                   # FastAPI app, CORS, lifespan
+│   ├── requirements.txt
+│   └── .env.example
 └── frontend/
     ├── app/
-    │   ├── page.tsx             # Task runner (main page)
-    │   └── workflows/
-    │       └── page.tsx         # Drag-and-drop workflow builder
+    │   ├── page.tsx                  # Task runner
+    │   ├── topics/page.tsx           # Digest topic management + history
+    │   ├── digest/[id]/page.tsx      # Shareable digest page
+    │   └── workflows/page.tsx        # Drag-and-drop workflow builder
     ├── components/
-    │   ├── StepFeed.tsx         # Real-time step display
-    │   ├── TaskHistory.tsx      # Past runs sidebar
-    │   ├── ToolSelector.tsx     # Tool toggle buttons
+    │   ├── StepFeed.tsx              # Real-time agent step display
+    │   ├── TaskHistory.tsx           # Past task sidebar
+    │   ├── ToolSelector.tsx          # Tool toggle buttons
     │   └── workflow/
-    │       ├── WorkflowCanvas.tsx  # React Flow canvas
-    │       └── ToolNode.tsx        # Custom tool node component
+    │       ├── WorkflowCanvas.tsx    # React Flow canvas
+    │       └── ToolNode.tsx          # Custom tool node cards
     └── lib/
-        └── api.ts               # All API calls (typed)
+        └── api.ts                    # Typed API client
 ```
 
 ---
@@ -69,7 +76,7 @@ autoflow/
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- An Anthropic API key
+- API keys for: Anthropic, Tavily, SendGrid
 
 ### Backend
 
@@ -80,12 +87,12 @@ source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Add your ANTHROPIC_API_KEY to .env
+# Fill in your API keys in .env
 
 uvicorn app.main:app --reload --port 8000
 ```
 
-API docs available at **http://localhost:8000/docs**
+Interactive API docs at **http://localhost:8000/docs**
 
 ### Frontend
 
@@ -101,21 +108,53 @@ Open **http://localhost:3000**
 
 ## Usage
 
+### Digest Topics (`/topics`)
+1. Click **+ New Topic**
+2. Enter a topic name and search query (e.g. `latest AI startup funding Australia 2025`)
+3. Set frequency: hourly / daily / weekly
+4. Add recipient emails
+5. Click **Create** — the scheduler registers it immediately
+6. Click **▶ Run Now** to generate the first digest without waiting
+7. View past digests and preview the HTML email inline
+8. Every digest gets a shareable URL at `/digest/[id]`
+
 ### Task Runner (`/`)
-1. Type a task in plain English
-2. Optionally select which tools to enable (leave empty = all tools)
-3. Click **Run** or press `Ctrl+Enter`
-4. Watch each agent step stream in real time
-5. Browse past runs in the sidebar — click any to replay it
+1. Type any task in plain English
+2. Optionally select which tools the agent can use
+3. `Ctrl+Enter` to run — watch each reasoning step stream live
+4. Past runs saved in the sidebar
 
 ### Workflow Builder (`/workflows`)
-1. Click **+ New Workflow**
-2. Name it and select tools — nodes appear on the canvas automatically
-3. Drag nodes to reposition; draw edges to show the intended flow
-4. Click **Create** to save
-5. Click **▶ Run**, enter a task, and the agent executes with that tool set
+1. **+ New Workflow** → name it, select tools
+2. Nodes appear on the canvas automatically — drag to reposition, draw edges to connect
+3. **Create** to save → **▶ Run** to execute with a task
 
 **Keyboard shortcuts:** `Ctrl+Enter` to run · `Esc` to clear
+
+---
+
+## How the Agent Works
+
+AutoFlow uses the **ReAct** (Reason + Act) pattern via LangGraph:
+
+```
+Task received
+    ↓
+[Think] What do I need to do?
+    ↓
+[Act]   Call a tool → search / summarize / email
+    ↓
+[Observe] What did the tool return?
+    ↓
+[Think] Do I have enough to answer?
+    ├── No  → call another tool
+    └── Yes → return final answer (streamed to browser)
+```
+
+For digests, the pipeline is:
+```
+Topic query → Tavily search → Claude synthesis → HTML template → SendGrid delivery
+```
 
 ---
 
@@ -134,36 +173,23 @@ Open **http://localhost:3000**
 | `PATCH` | `/api/v1/workflows/{id}` | Update workflow |
 | `DELETE` | `/api/v1/workflows/{id}` | Delete workflow |
 | `POST` | `/api/v1/workflows/{id}/run` | Run workflow with SSE streaming |
+| `GET` | `/api/v1/topics` | List digest topics |
+| `POST` | `/api/v1/topics` | Create topic |
+| `PATCH` | `/api/v1/topics/{id}` | Update topic |
+| `DELETE` | `/api/v1/topics/{id}` | Delete topic |
+| `POST` | `/api/v1/topics/{id}/run` | Trigger digest immediately |
+| `GET` | `/api/v1/topics/{id}/digests` | List digests for a topic |
+| `GET` | `/api/v1/digests/{id}` | Get single digest (for shareable page) |
 
 ---
 
-## How the Agent Works
+## Environment Variables
 
-AutoFlow uses the **ReAct** (Reason + Act) pattern via LangGraph:
+Copy `backend/.env.example` to `backend/.env` and fill in:
 
-```
-User task
-    ↓
-[Think] — what do I need to do?
-    ↓
-[Act]   — call a tool (search / summarize / email)
-    ↓
-[Observe] — what did the tool return?
-    ↓
-[Think] — do I have enough to answer?
-    ↓
-[Final answer] → streamed to browser
-```
-
-Each step is streamed to the browser via SSE as it happens — no polling, no waiting for the full response.
-
----
-
-## Build Phases
-
-| Phase | Commit | What was built |
-|-------|--------|---------------|
-| 1 | `17aa538` | FastAPI backend + LangGraph ReAct agent + tools |
-| 2 | `872260a` | SQLite task history + SSE streaming |
-| 3 | `f6d59aa` | Next.js 14 frontend with real-time step feed |
-| 4 | `593ac9c` | Drag-and-drop React Flow workflow builder |
+| Variable | Where to get it |
+|----------|----------------|
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
+| `TAVILY_API_KEY` | [app.tavily.com](https://app.tavily.com) |
+| `SENDGRID_API_KEY` | [app.sendgrid.com](https://app.sendgrid.com) |
+| `SENDGRID_FROM_EMAIL` | A verified sender in your SendGrid account |
